@@ -5,7 +5,7 @@ const sanitizeHtml = require('sanitize-html');
 const unescape = require('unescape');
 Promise.promisifyAll(db);
 
-const API_CALL_INTERVAL = 2500;
+const API_CALL_INTERVAL = 2000;
 
 //contains the id's of the threads to fetch
 var threadIdStack = [];
@@ -105,11 +105,13 @@ async function performNextAction() {
     let activeThreadIds = ops.map((op) => {
       return op.no
     })
+    
+    console.log("active thread ids: %j", activeThreadIds);
 
-    threadLastModified = Object.keys(threadLastModified).map(threadId => {
-      if(!activeThreadIds.includes(threadId)){
+    Object.keys(threadLastModified).map(threadId => {
+      if(!activeThreadIds.includes(parseInt(threadId))){
         console.log("thread %s is dead", threadId)
-        delete activeThreadIds[threadId];
+        delete threadLastModified[threadId];
       }
     })
     
