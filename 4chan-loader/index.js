@@ -1,11 +1,19 @@
 const Promise = require('bluebird');
 const rp = require('request-promise');
-const db = require('nano')('http://localhost:5984/bigmoney');
+const nano = require('nano');
+const log = require('pino')();
 const sanitizeHtml = require('sanitize-html');
+const url = require('url');
 const unescape = require('unescape');
-Promise.promisifyAll(db);
 
 const API_CALL_INTERVAL = 2000;
+
+//DB
+const COUCH_URL = process.env.COUCH_CONNECTION_STRING || 'http://localhost:5984';
+const COUCH_DATABASE = process.env.COUCH_DATABASE || 'bigmoney';
+const db = nano(url.resolve(COUCH_URL, COUCH_DATABASE));
+
+Promise.promisifyAll(db);
 
 //contains the id's of the threads to fetch
 var threadIdStack = [];
@@ -25,14 +33,14 @@ async function getThreads() {
       json: true // Automatically parses the JSON string in the response
     })
     .then((pages) => {
-      console.log("Pages retrieved: %d", pages.length);
       let originalPosts = pages.reduce((originalPosts, page) => {
         return originalPosts.concat(page.threads)
       }, [])
+      log.info({retrieved_pages: pages.length, posts: originalPosts.length}, "getThreads")
       return originalPosts;
     })
     .catch((err) => {
-      console.log(err);
+      log.error(err);
     })
 }
 
@@ -45,7 +53,7 @@ function threadHasDocument(threadId){
         //return db.insertAsync(thread, threadId);
         return false;
       } else {
-        throw error
+        log.error(error)
       }
     })
 
@@ -79,18 +87,18 @@ async function fetchThread(threadId) {
   })
 
   let docExists = await threadHasDocument(threadId);
-  console.log("doc exists: %s", docExists)
 
   if(docExists){
     let curDoc = await db.getAsync(threadId);
     try{
       await db.insertAsync({posts: thread.posts, _rev: curDoc._rev, _id: new String(threadId)})
+      log.info({threadId}, "document created")
     } catch (e) {
-      console.log("failed to update thread on db")
-      console.log(e)
+      log.error(e);
     }
   }else{
     let body = await db.insertAsync({_id: new String(threadId), posts: thread.posts} );
+    log.info({threadId}, "document updated")
   }
 }
 
@@ -99,6 +107,7 @@ async function fetchThread(threadId) {
 //gets called every API_CALL_INTERVAL ms to initiate a fetch of a thread
 async function performNextAction() {
   if (threadIdStack.length == 0) {
+    log.info("getting new thread ids")
     let ops = await getThreads();
    
     //Remove dead threads from the threadLastModified map
@@ -106,11 +115,8 @@ async function performNextAction() {
       return op.no
     })
     
-    console.log("active thread ids: %j", activeThreadIds);
-
     Object.keys(threadLastModified).map(threadId => {
       if(!activeThreadIds.includes(parseInt(threadId))){
-        console.log("thread %s is dead", threadId)
         delete threadLastModified[threadId];
       }
     })
@@ -132,7 +138,7 @@ async function performNextAction() {
     threadIdStack = threadIdStack.concat(threadIds);
   } else {
     let threadId = threadIdStack.pop();
-    console.log("Fetching thread %d. %d more left in the stack.", threadId, threadIdStack.length);
+    log.info({threadId}, "triggering fetch")
     fetchThread(threadId);
   }
 }
@@ -141,7 +147,7 @@ function start() {
   if (nextActionInterval) {
     throw new Error("The miner is already running");
   }
-  console.log("Starting miner");
+  log.info("miner start");
   nextActionInterval = setInterval(performNextAction, API_CALL_INTERVAL);
 }
 
@@ -149,7 +155,7 @@ function stop() {
   if (!nextActionInterval) {
     throw new Error("The miner is already stopped");
   }
-  console.log("Stopping miner");
+  log.info("miner stop")
   clearInterval(nextActionInterval);
 
 }
