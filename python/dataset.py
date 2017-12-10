@@ -17,10 +17,13 @@ def getThreadsId(db):
 def getThreadData(db):
     posts = []
     threadsId = getThreadsId(db)
-    for thread in threadsId:
-        thread_doc = db.get(thread)
-        for post in thread_doc['posts']:
-            posts.append(post)
+    try:
+        for thread in threadsId:
+            thread_doc = db.get(thread)
+            for post in thread_doc['posts']:
+                posts.append(post)
+    except Exception as e:
+        print (str(e))    
     return posts
             
             
@@ -41,4 +44,6 @@ posts = getThreadData(db)
 df = buildDataFrame(posts)
 print(df.describe())
 
-df.to_csv('biz_1.csv')
+filename='biz-data.csv'
+df.to_csv(filename)
+print ('Saved new {}.csv file'.format(filename))
