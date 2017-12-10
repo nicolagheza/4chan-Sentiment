@@ -4,13 +4,12 @@ import numpy as np
 import json
 from couchdb.mapping import Document, TextField, IntegerField, DateTimeField
 
-def initServer(url='http://192.168.10.111:5984'):
+def initServer(url='http://localhost:5985'):
     server = couchdb.Server(url)
-    #secure_remote_server = Server('https://username:password@example.com:5984/')
     return server
 
 def getDb(server):
-    return server['bigmoney']
+    return server['biz-data']
 
 def getThreadsId(db):
     return [docid['id'] for docid in db.view('_all_docs')]
@@ -28,8 +27,7 @@ def getThreadData(db):
 def buildDataFrame(posts):
     df = pd.DataFrame(columns=['id',
                                'unix_time',
-                               'comment',
-                               'sentiment'])
+                               'comment'])
     for post in posts:
         id = post['no']
         time = post['time']
