@@ -1,6 +1,8 @@
 import couchdb
 import pandas as pd
 import numpy as np
+from time import time
+import re
 import json
 from couchdb.mapping import Document, TextField, IntegerField, DateTimeField
 
@@ -14,34 +16,31 @@ def getDb(server):
 def getThreadsId(db):
     return [docid['id'] for docid in db.view('_all_docs')]
 
-def getThreadData(db):
+def getPostsData(db):
     posts = []
-    threadsId = getThreadsId(db)
-    try:
-        for thread in threadsId:
-            thread_doc = db.get(thread)
-            for post in thread_doc['posts']:
-                posts.append(post)
-    except Exception as e:
-        print (str(e))    
+    for post in db.view('derivatives/posts'):
+        posts.append(post)
     return posts
-            
-            
+        
+          
 def buildDataFrame(posts):
     df = pd.DataFrame(columns=['id',
-                               'unix_time',
                                'comment'])
-    for post in posts:
-        id = post['no']
-        time = post['time']
-        comment = post['com']
-        df = df.append({'id':id, 'unix_time':time, 'comment':comment}, ignore_index=True)
+    for i, post in enumerate(posts):
+        if not(i==0) and i % 1000==0:
+            print (i, 'iterations completed')
+        id = post.id
+        comment = re.sub('','',str(post.value))
+        if len(comment) > 0:
+            df = df.append({'id':id, 'comment':comment}, ignore_index=True)
     return df
 
+t0=time()
 server = initServer()
 db = getDb(server)
-posts = getThreadData(db)
+posts = getPostsData(db)
 df = buildDataFrame(posts)
+print("done in %fs" % (time() - t0))
 print(df.describe())
 
 filename='biz-data.csv'
